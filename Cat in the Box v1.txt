@@ -1,0 +1,365 @@
+///////////////////////////////////////////////////////////////////////////////
+/*
+File Name:
+    Cat in the Box.c
+
+Purpose:
+    A playable text based game based on the 2 player Cat in the Box
+    by Muneyuki Yokuochi published by Bézier Games
+
+Author:
+    Kasey Clarke
+
+Date:
+    6/29/2023
+
+Version:
+    1
+*/
+
+#include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <time.h>
+// colors red, blue, yellow, green
+#define COLORS 4
+// columns of the research board including the color character
+#define COLUMNS 6
+// cards have a color index and a number
+#define CARD_SIZE 2
+
+// functions for setting up the game
+void print_array(int a[], int size);
+void initialize_deck(int deck[], int size);
+void shuffle(int deck[], int size);
+void deal_cards(int deck[], int cards, int player[], int ai[], int hand_size);
+void initialize_board(char board[][COLUMNS], char colors[]);
+void print_board(char board[][COLUMNS]);
+void reveal_cards(int deck[], int deck_size, int revealed[], int revealed_size, int hand_size);
+void mark_revealed(char research_board[COLORS][COLUMNS], int revealed[], int revealed_size);
+// void play_a_card(char research_board[COLORS][COLUMNS], int hand[], int hand_size, char player_board[], int board_size);
+void display_hand(int hand[], int hand_size, int discarded);
+void discard_a_card(int hand[], int hand_size, int *discarded);
+
+// functions to play the game
+void pick_a_color(char player_board[COLORS], char research_board[COLORS][COLUMNS], int card[CARD_SIZE]);
+void pick_a_card(int hand[], int hand_size, int card[CARD_SIZE]);
+void spot_available(int card[CARD_SIZE], char research_board[COLORS][COLUMNS], bool *card_resolved);
+
+bool declare_paradox();
+
+void delete_from_hand(int hand[], int hand_size, int card[CARD_SIZE]);
+
+int main()
+{
+    int deck_size = 25, hand_size = 10, board_size = 4, revealed_size = 3;
+    int deck[deck_size], player_hand[hand_size], ai_hand[hand_size], revealed[revealed_size];
+    int player_discarded = 0, ai_discarded = 0;            // keeps track of the card discarded
+    int card_played[CARD_SIZE], ai_card_played[CARD_SIZE]; // curent data from played cards
+    char colors[COLORS] = {'r', 'b', 'y', 'g'};
+    char player_colors[COLORS] = {'r', 'b', 'y', 'g'};
+    char ai_colors[COLORS] = {'r', 'b', 'y', 'g'};
+    char research_board[COLORS][COLUMNS]; // 4 rows 6 columns
+
+    initialize_deck(deck, deck_size);
+    srand(time(NULL));
+    shuffle(deck, deck_size);
+    deal_cards(deck, deck_size, player_hand, ai_hand, hand_size);
+    initialize_board(research_board, colors);
+    reveal_cards(deck, deck_size, revealed, revealed_size, hand_size);
+    mark_revealed(research_board, revealed, revealed_size);
+    print_board(research_board);
+
+    display_hand(player_hand, hand_size, player_discarded);
+    int cards_in_hand = hand_size;
+    discard_a_card(player_hand, hand_size, &player_discarded);
+    --cards_in_hand; // one card was discarded
+
+    bool paradox = false;
+    while (cards_in_hand > 1) //>= hand_size) //play untill 1 card in hand
+    {                         // loops while cards in hand is > 1
+        bool card_resolved = false;
+        while (!card_resolved && !paradox)
+        { // loops until a card can be played or a paradox is declared
+            display_hand(player_hand, hand_size, player_discarded);
+            pick_a_color(player_colors, research_board, card_played);
+            pick_a_card(player_hand, hand_size, card_played);
+            spot_available(card_played, research_board, &card_resolved);
+            if (card_resolved)
+            { // delete card from hand
+                --cards_in_hand;
+                delete_from_hand(player_hand, hand_size, card_played);
+                // mark the research board
+            }
+            else
+            { // prompt for paradox
+                paradox = declare_paradox();
+            }
+        }
+        display_hand(player_hand, hand_size, player_discarded);
+        print_board(research_board);
+    }
+}
+
+void delete_from_hand(int hand[], int hand_size, int card[CARD_SIZE])
+{
+    printf("delete from hand here\n");
+    for (int i = 0; i < hand_size; i++)
+    {
+        if (hand[i] == card[1])
+        {
+            hand[i] = 0;
+            break;
+        }
+    }
+}
+
+bool declare_paradox()
+{
+    printf("card did not resolve, would you like to declare a paradox (y/n)? ");
+    char response;
+    scanf(" %c", &response);
+    if (response == 'y')
+        return true;
+    else
+        return false;
+}
+
+void spot_available(int card[CARD_SIZE], char research_board[COLORS][COLUMNS], bool *card_resolved)
+{ // checks to see if the card color and number have a corresponding spot available oin the research board
+    char whats_in_the_box = research_board[card[0]][card[1]];
+    // printf(" %c\n", whats_in_the_box);
+    if ((whats_in_the_box >= '1') && (whats_in_the_box <= '5'))
+    {
+        printf("spot available\n");
+        *card_resolved = true;
+    }
+    else
+    {
+        printf("spot taken\n");
+        *card_resolved = false;
+    }
+}
+
+void pick_a_card(int hand[], int hand_size, int card[CARD_SIZE])
+{ // updates card_played so its second element contains a valid card number
+    int card_number = -1;
+    // printf("\n");
+    bool card_needed = true;
+    while (card_needed)
+    {
+        printf("pick a card: ");
+        int picked;
+        scanf(" %d", &picked);
+        for (int i = 0; i < hand_size; i++)
+        { // checke to see if the number picked is in the hand
+            if ((picked == hand[i]) && picked != 0)
+            {
+                card_needed = false;
+                card_number = picked;
+                break;
+            }
+        }
+    }
+    card[1] = card_number; // the 0th index is the color, 1th is the card number
+    printf("\n");
+}
+
+void pick_a_color(char player_board[COLORS], char research_board[COLORS][COLUMNS], int card[CARD_SIZE])
+{ // updates card_played so that it's first element contains a valid color index
+    int color_index = -1;
+    bool color_needed = true;
+    while (color_needed)
+    { // print the player board prompt for input
+        printf("player board: ");
+        for (int i = 0; i < COLORS; i++)
+            printf("%c ", player_board[i]);
+
+        printf("\npick a color: ");
+        char picked;
+        scanf(" %c", &picked);
+        for (int i = 0; i < COLORS; i++)
+        { // check the player board
+            if (picked == player_board[i])
+            {
+                color_index = i;
+                break;
+            }
+        }
+        if (color_index > -1)
+        { // check the research board
+            for (int i = 1; i < COLUMNS; i++)
+            {
+                char research_char = research_board[color_index][i];
+                if ((research_char >= '1') && (research_char <= '5'))
+                {
+                    color_needed = false;
+                    break;
+                }
+            }
+        }
+    }
+    card[0] = color_index;
+}
+
+void discard_a_card(int hand[], int hand_size, int *discarded)
+{
+    printf("discard a card: ");
+    bool in_hand = false;
+    int input;
+    while (!in_hand)
+    {
+        scanf("%d", &input);
+
+        for (int i = 0; i < hand_size; i++)
+        {
+            if (input == hand[i])
+            {
+                hand[i] = 0;
+                in_hand = true;
+                *discarded = input;
+                break;
+            }
+        }
+        if (in_hand == false)
+            printf("try again, discard a card: ");
+    }
+    printf("\n");
+}
+
+void display_hand(int hand[], int hand_size, int discarded)
+{
+    printf("hand: ");
+    for (int i = 0; i < hand_size; i++)
+    {
+        if (hand[i] != 0)
+            printf("%d ", hand[i]);
+    }
+
+    if (discarded != 0)
+        printf("\tdiscarded: %d", discarded);
+
+    printf("\n");
+}
+
+void mark_revealed(char research_board[COLORS][COLUMNS], int revealed[], int revealed_size)
+{
+    int a = revealed[0], b = revealed[1], c = revealed[2];
+    // a = b = c = 3;
+    if (a == b && b == c)
+    {
+        // printf("they all match %d\n", a);
+        research_board[1][a] = '-';
+        research_board[2][b] = '-';
+        research_board[3][c] = '-';
+    }
+    else if (a != b && a != c && b != c)
+    {
+        // printf("all unique\n");
+        research_board[3][a] = '-';
+        research_board[3][b] = '-';
+        research_board[3][c] = '-';
+    }
+    else if (a == b)
+    {
+        // printf("a and b match\n");
+        research_board[3][a] = '-';
+        research_board[2][b] = '-';
+        research_board[3][c] = '-';
+    }
+    else if (a == c)
+    {
+        // printf("a and c match\n");
+        research_board[3][a] = '-';
+        research_board[3][b] = '-';
+        research_board[2][c] = '-';
+    }
+    else
+    {
+        // printf("b and c match\n");
+        research_board[3][a] = '-';
+        research_board[3][b] = '-';
+        research_board[2][c] = '-';
+    }
+}
+
+void reveal_cards(int deck[], int deck_size, int revealed[], int revealed_size, int hand_size)
+{
+
+    printf("revealed cards: ");
+    for (int i = 0; i < revealed_size; i++)
+    {
+        revealed[i] = deck[hand_size + hand_size + i];
+        printf("%d ", revealed[i]);
+    }
+    printf("\n");
+}
+
+void deal_cards(int deck[], int cards, int player[], int ai[], int hand_size)
+{
+    for (int i = 0; i < hand_size; i++)
+    {
+        player[i] = deck[i];
+    }
+    for (int i = 0; i < hand_size; i++)
+    {
+        ai[i] = deck[i + hand_size];
+    }
+}
+
+void print_board(char board[COLORS][COLUMNS])
+{
+    printf(" research board\n");
+    for (int i = 0; i < COLORS; i++)
+    {
+        for (int j = 0; j < COLUMNS; j++)
+        {
+            printf("%c ", board[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+void initialize_board(char board[COLORS][COLUMNS], char colors[])
+{
+    for (int i = 0; i < COLORS; i++)
+    {
+        board[i][0] = colors[i];
+        for (int j = 1; j < COLUMNS; j++)
+        {
+            board[i][j] = '0' + j;
+        }
+    }
+}
+
+void print_array(int a[], int size)
+{
+    for (int i = 0; i < size; i++)
+        printf("%d ", a[i]);
+    printf("\n");
+}
+
+void shuffle(int deck[], int size)
+{
+    for (char i = 0; i < size; i++)
+    {
+        int temp_a = deck[i];
+        int random = rand() % size;
+        int temp_b = deck[random];
+        deck[i] = temp_b;
+        deck[random] = temp_a;
+    }
+}
+
+void initialize_deck(int deck[], int size)
+{
+    int count = 5;
+    for (char i = 0; i < count; i++)
+    {
+        for (char j = 0; j < count; j++)
+        {
+            deck[j + i * count] = i + 1;
+        }
+    }
+}
+///////////////////////////////////////////////////////////////////////////////
